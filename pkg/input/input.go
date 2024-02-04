@@ -20,7 +20,7 @@ type Input struct {
 
 func New(rdr io.Reader) *Input {
 	scn := bufio.NewScanner(rdr)
-  scn.Split(bufio.ScanLines)
+	scn.Split(bufio.ScanLines)
 	return &Input{scn: scn}
 }
 

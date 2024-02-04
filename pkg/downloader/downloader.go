@@ -23,22 +23,22 @@ type downInfo struct {
 type Status struct {
 	FileName   string
 	Percentage int
-  Err error
+	Err        error
 }
 
 func Download(url *url.URL, status chan<- Status) {
 	defer close(status)
 	rInp, err := openIStream(url)
 	if err != nil {
-    status <- Status{Err: err}
-		return 
+		status <- Status{Err: err}
+		return
 	}
 	defer rInp.rdr.Close()
 
 	wOut, err := openWFile(url.Path)
 	if err != nil {
-    status <- Status{Err: err}
-		return 
+		status <- Status{Err: err}
+		return
 	}
 	defer wOut.Close()
 
@@ -46,15 +46,17 @@ func Download(url *url.URL, status chan<- Status) {
 	for err != io.EOF || cpd > 0 {
 		cpd, err = io.CopyN(wOut, rInp.rdr, bufsize)
 		if err != nil && err != io.EOF {
-      status <- Status{Err: err}
+			status <- Status{Err: err}
 			return
 		}
 		soFar += cpd
 		if rInp.iSize > 0 {
 			status <- Status{FileName: path.Base(url.Path), Percentage: int((soFar * 100) / int64(rInp.iSize))}
+		} else {
+			status <- Status{FileName: path.Base(url.Path)}
 		}
 	}
-  status <- Status{FileName: path.Base(url.Path), Percentage: 100}
+	status <- Status{FileName: path.Base(url.Path), Percentage: 100}
 }
 
 func openIStream(url *url.URL) (*downInfo, error) {
