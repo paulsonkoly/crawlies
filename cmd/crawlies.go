@@ -81,7 +81,7 @@ func inputThread(i *input.Input, errors *errorCollector) <-chan url.URL {
 			if i.Err() == io.EOF {
 				return
 			}
-			if i.Err() != nil && i.Err() != io.EOF {
+			if i.Err() != nil {
 				errors.addError(i.Err())
 				continue
 			}
@@ -117,24 +117,24 @@ func progressThread(statuses <-chan downloader.Status, errors *errorCollector) <
 	final := make(chan struct{})
 
 	go func() {
-    fNameToBar := map[string]*mpb.Bar{}
-    progress := mpb.New()
+		fNameToBar := map[string]*mpb.Bar{}
+		progress := mpb.New()
 
-    for status := range(statuses) {
-      if status.Err != nil {
-        errors.addError(status.Err)
-        continue
-      }
-      if _, ok := fNameToBar[status.FileName] ; !ok {
-        bar := progress.AddBar(100, mpb.AppendDecorators(decor.Name(status.FileName, decor.WC{W: 70})))
-        fNameToBar[status.FileName] = bar
-      }
-      bar := fNameToBar[status.FileName]
-      bar.SetCurrent(int64(status.Percentage))
-    }
+		for status := range statuses {
+			if status.Err != nil {
+				errors.addError(status.Err)
+				continue
+			}
+			if _, ok := fNameToBar[status.FileName]; !ok {
+				bar := progress.AddBar(100, mpb.AppendDecorators(decor.Name(status.FileName, decor.WC{W: 70})))
+				fNameToBar[status.FileName] = bar
+			}
+			bar := fNameToBar[status.FileName]
+			bar.SetCurrent(int64(status.Percentage))
+		}
 
 		final <- struct{}{}
-    close(final)
+		close(final)
 	}()
 
 	return final
