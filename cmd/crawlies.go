@@ -11,8 +11,8 @@ import (
 
 	"github.com/paulsonkoly/crawlies/pkg/downloader"
 	"github.com/paulsonkoly/crawlies/pkg/input"
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
 var inputFile = flag.String("input", "", "input file name")
@@ -46,7 +46,7 @@ func newProgressArbiter() *progressArbiter {
 func (p *progressArbiter) addBar(fileName string) *mpb.Bar {
 	p.Lock()
 	defer p.Unlock()
-	return p.progress.AddBar(100, mpb.AppendDecorators(decor.Name(fileName)))
+  return p.progress.AddBar(100, mpb.AppendDecorators(decor.Name(fileName, decor.WC{W: 70})))
 }
 
 type inputArbiter struct {
@@ -98,6 +98,7 @@ func main() {
 		}()
 	}
 	wg.Wait()
+  p.progress.Wait()
 
 	for _, err2 := range errors.errors {
 		fmt.Println(err2)
@@ -125,7 +126,7 @@ func downloaderThread(i *inputArbiter, p *progressArbiter, errors *errorCollecto
 			if bar == nil {
 				bar = p.addBar(stat.FileName)
 			}
-			bar.IncrBy(stat.Percentage - int(bar.Current()))
+			bar.SetCurrent(int64(stat.Percentage))
 			if stat.Percentage == 100 {
 				fin = true
 			}
