@@ -13,6 +13,7 @@ import (
 
 const bufsize = 4096
 
+// IOError happens when there is a problem in writing the downloaded file
 var IOError = errors.New("io error")
 
 type downInfo struct {
@@ -20,12 +21,14 @@ type downInfo struct {
 	iSize int
 }
 
+// Status is the progress status of a download
 type Status struct {
-	FileName   string
-	Percentage int
-	Err        error
+	FileName   string // FileNAme refers to the file being downloaded
+	Percentage int    // Percentage refers to the dowload progression
+	Err        error  // Err indicates that there was an issue during download
 }
 
+// Download executes a download, reporting status on the status channel
 func Download(url *url.URL, status chan<- Status) {
 	defer close(status)
 	rInp, err := openIStream(url)

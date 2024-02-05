@@ -1,3 +1,18 @@
+// ./crawlies
+//
+// A simple command line tool to download many files via http. Given an input
+// file it reads URLs from the file and starts downloading on the specified
+// number of threads.
+//
+// While dowloading it outputs using mpb a multi progress bar.
+// Errors are aggregated and output at the end.
+//
+//	Usage of crawlies:
+//
+//	   -input string
+//	       input file name
+//	   -threadCnt int
+//	       number of downloader threads (default 8)
 package main
 
 import (
@@ -46,7 +61,7 @@ func newProgressArbiter() *progressArbiter {
 func (p *progressArbiter) addBar(fileName string) *mpb.Bar {
 	p.Lock()
 	defer p.Unlock()
-  return p.progress.AddBar(100, mpb.AppendDecorators(decor.Name(fileName, decor.WC{W: 70})))
+	return p.progress.AddBar(100, mpb.AppendDecorators(decor.Name(fileName, decor.WC{W: 70})))
 }
 
 type inputArbiter struct {
@@ -98,7 +113,7 @@ func main() {
 		}()
 	}
 	wg.Wait()
-  p.progress.Wait()
+	p.progress.Wait()
 
 	for _, err2 := range errors.errors {
 		fmt.Println(err2)
