@@ -30,7 +30,6 @@ type Status struct {
 
 // Download executes a download, reporting status on the status channel
 func Download(url *url.URL, status chan<- Status) {
-	defer close(status)
 	rInp, err := openIStream(url)
 	if err != nil {
 		status <- Status{Err: err}

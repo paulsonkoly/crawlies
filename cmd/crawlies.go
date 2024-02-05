@@ -49,45 +49,6 @@ func (e *errorCollector) addError(err error) {
 	e.errors = append(e.errors, err)
 }
 
-type progressArbiter struct {
-	sync.Mutex
-	progress *mpb.Progress
-}
-
-func newProgressArbiter() *progressArbiter {
-	return &progressArbiter{progress: mpb.New()}
-}
-
-func (p *progressArbiter) addBar(fileName string) *mpb.Bar {
-	p.Lock()
-	defer p.Unlock()
-	return p.progress.AddBar(100, mpb.AppendDecorators(decor.Name(fileName, decor.WC{W: 70})))
-}
-
-type inputArbiter struct {
-	sync.Mutex
-	input *input.Input
-}
-
-func newInputArbiter(i io.Reader) *inputArbiter {
-	return &inputArbiter{input: input.New(i)}
-}
-
-func (i *inputArbiter) getUrl(errors *errorCollector) (*url.URL, bool) {
-	i.Lock()
-	defer i.Unlock()
-
-	if !i.input.Next() {
-		return nil, false
-	}
-	if i.input.Err() != nil && i.input.Err() != io.EOF {
-		errors.addError(i.input.Err())
-		return nil, false
-	}
-	url := i.input.Url()
-	return &url, true
-}
-
 func main() {
 	flag.Parse()
 	if *inputFile == "" {
@@ -100,51 +61,81 @@ func main() {
 	}
 	defer fInp.Close()
 
-	inp := newInputArbiter(fInp)
-	p := newProgressArbiter()
 	errors := newErrorCollector()
+	urls := inputThread(input.New(fInp), errors)
+	statuses := downloaderFanOut(urls)
+	final := progressThread(statuses, errors)
 
-	wg := sync.WaitGroup{}
-	for i := 0; i < *threadCnt; i++ {
-		wg.Add(1)
-		go func() {
-			downloaderThread(inp, p, errors)
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	p.progress.Wait()
+	<-final
 
 	for _, err2 := range errors.errors {
 		fmt.Println(err2)
 	}
 }
 
-func downloaderThread(i *inputArbiter, p *progressArbiter, errors *errorCollector) {
-	for {
-		url, ok := i.getUrl(errors)
-		if !ok {
-			return
-		}
-		var bar *mpb.Bar
-
-		status := make(chan downloader.Status)
-		go func() { downloader.Download(url, status) }()
-
-		for fin := false; !fin; {
-			stat := <-status
-			if stat.Err != nil {
-				errors.addError(stat.Err)
-				fin = true
+func inputThread(i *input.Input, errors *errorCollector) <-chan url.URL {
+	out := make(chan url.URL)
+	go func() {
+		defer close(out)
+		for i.Next() {
+			if i.Err() == io.EOF {
+				return
+			}
+			if i.Err() != nil && i.Err() != io.EOF {
+				errors.addError(i.Err())
 				continue
 			}
-			if bar == nil {
-				bar = p.addBar(stat.FileName)
-			}
-			bar.SetCurrent(int64(stat.Percentage))
-			if stat.Percentage == 100 {
-				fin = true
-			}
+			url := i.Url()
+			out <- url
 		}
+	}()
+	return out
+}
+
+func downloaderFanOut(urls <-chan url.URL) <-chan downloader.Status {
+	statuses := make(chan downloader.Status)
+	wg := sync.WaitGroup{}
+	wg.Add(*threadCnt)
+
+	for i := 0; i < *threadCnt; i++ {
+		go func() {
+			for url := range urls {
+				downloader.Download(&url, statuses)
+			}
+			wg.Done()
+		}()
 	}
+
+	go func() {
+		wg.Wait()
+		close(statuses)
+	}()
+	return statuses
+}
+
+func progressThread(statuses <-chan downloader.Status, errors *errorCollector) <-chan struct{} {
+	final := make(chan struct{})
+
+	go func() {
+    fNameToBar := map[string]*mpb.Bar{}
+    progress := mpb.New()
+
+    for status := range(statuses) {
+      if status.Err != nil {
+        errors.addError(status.Err)
+        continue
+      }
+      if _, ok := fNameToBar[status.FileName] ; !ok {
+        bar := progress.AddBar(100, mpb.AppendDecorators(decor.Name(status.FileName, decor.WC{W: 70})))
+        fNameToBar[status.FileName] = bar
+      }
+      bar := fNameToBar[status.FileName]
+      bar.SetCurrent(int64(status.Percentage))
+    }
+
+		final <- struct{}{}
+    close(final)
+	}()
+
+	return final
 }
